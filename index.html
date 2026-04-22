@@ -855,7 +855,8 @@
                     document.getElementById('wordInput').focus();
                 }
             } catch (e) {
-                showToast('Impossible de joindre AnkiConnect. AnkiDroid ouvert ?', 'error');
+                console.error('AnkiConnect error:', e);
+                showToast('Impossible de joindre AnkiConnect : ' + (e.message || e), 'error');
             }
 
             btn.disabled = false;
