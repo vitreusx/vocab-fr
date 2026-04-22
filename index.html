@@ -65,8 +65,13 @@
             margin-top: 0.75rem;
         }
 
-        #wordInput {
+        .input-wrap {
             flex: 1;
+            position: relative;
+        }
+
+        #wordInput {
+            width: 100%;
             height: 42px;
             border: 1px solid #ddd;
             border-radius: 10px;
@@ -336,6 +341,43 @@
             color: #534AB7;
         }
 
+        .suggestions {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            overflow: hidden;
+            z-index: 20;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+        }
+
+        .suggestion-item {
+            padding: 10px 14px;
+            font-size: 16px;
+            cursor: pointer;
+            border-bottom: 0.5px solid #f0f0f0;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item.active {
+            background: #f0effc;
+        }
+
+        .def-link {
+            color: #534AB7;
+            text-decoration: none;
+        }
+
+        .def-link:hover {
+            text-decoration: underline;
+        }
+
         .wikt-link {
             font-size: 13px;
             color: #534AB7;
@@ -354,8 +396,11 @@
         <h1>Vocab FR</h1>
         <p>Dictionnaire + AnkiDroid</p>
         <div class="search-row">
-            <input type="text" id="wordInput" placeholder="Entrez un mot…" autocomplete="off" autocorrect="off"
-                spellcheck="false">
+            <div class="input-wrap">
+                <input type="text" id="wordInput" placeholder="Entrez un mot…" autocomplete="off" autocorrect="off"
+                    spellcheck="false">
+                <div class="suggestions" id="suggestions"></div>
+            </div>
             <button id="searchBtn" onclick="lookup()">Chercher</button>
         </div>
     </header>
@@ -372,9 +417,103 @@
         let currentWord = '';
         let currentDefinitions = [];
 
-        document.getElementById('wordInput').addEventListener('keydown', e => {
-            if (e.key === 'Enter') lookup();
+        let suggestTimer;
+        let suggestionItems = [];
+        let selectedIdx = -1;
+
+        const wordInput = document.getElementById('wordInput');
+        const suggestionsEl = document.getElementById('suggestions');
+
+        wordInput.addEventListener('keydown', e => {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                selectedIdx = Math.min(selectedIdx + 1, suggestionItems.length - 1);
+                updateActive();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                selectedIdx = Math.max(selectedIdx - 1, -1);
+                updateActive();
+            } else if (e.key === 'Enter') {
+                if (selectedIdx >= 0 && suggestionItems[selectedIdx]) {
+                    selectSuggestion(suggestionItems[selectedIdx]);
+                } else {
+                    hideSuggestions();
+                    lookup();
+                }
+            } else if (e.key === 'Escape') {
+                hideSuggestions();
+            }
         });
+
+        wordInput.addEventListener('input', e => {
+            clearTimeout(suggestTimer);
+            selectedIdx = -1;
+            const val = e.target.value.trim();
+            if (!val) { hideSuggestions(); return; }
+            suggestTimer = setTimeout(() => fetchSuggestions(val), 250);
+        });
+
+        wordInput.addEventListener('blur', () => {
+            setTimeout(hideSuggestions, 150);
+        });
+
+        suggestionsEl.addEventListener('mousedown', e => {
+            const item = e.target.closest('.suggestion-item');
+            if (item) {
+                e.preventDefault();
+                selectSuggestion(item.dataset.word);
+            }
+        });
+
+        async function fetchSuggestions(query) {
+            try {
+                const url = `https://fr.wiktionary.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&namespace=0&limit=6&format=json&origin=*`;
+                const r = await fetch(url);
+                const json = await r.json();
+                suggestionItems = json[1] || [];
+                renderSuggestions(suggestionItems);
+            } catch (e) { /* silently fail */ }
+        }
+
+        function renderSuggestions(items) {
+            if (!items.length) { suggestionsEl.innerHTML = ''; return; }
+            suggestionsEl.innerHTML = items.map(s =>
+                `<div class="suggestion-item" data-word="${escHtml(s)}">${escHtml(s)}</div>`
+            ).join('');
+        }
+
+        function updateActive() {
+            suggestionsEl.querySelectorAll('.suggestion-item').forEach((el, i) => {
+                el.classList.toggle('active', i === selectedIdx);
+            });
+            if (selectedIdx >= 0) wordInput.value = suggestionItems[selectedIdx];
+        }
+
+        function selectSuggestion(word) {
+            wordInput.value = word;
+            hideSuggestions();
+            lookup();
+        }
+
+        function hideSuggestions() {
+            suggestionsEl.innerHTML = '';
+            suggestionItems = [];
+            selectedIdx = -1;
+        }
+
+        document.getElementById('main').addEventListener('click', e => {
+            const a = e.target.closest('a[data-lookup]');
+            if (a) {
+                e.preventDefault();
+                lookupWord(a.dataset.lookup);
+            }
+        });
+
+        function lookupWord(word) {
+            document.getElementById('wordInput').value = word;
+            hideSuggestions();
+            lookup();
+        }
 
         async function lookup() {
             const word = document.getElementById('wordInput').value.trim();
@@ -388,7 +527,7 @@
 
             try {
                 const data = await fetchWiktionary(word);
-                renderResult(word, data);
+                renderResult(data.word, data);
             } catch (e) {
                 setStatus('Mot non trouvé ou erreur réseau. Vérifiez votre connexion.');
             }
@@ -398,23 +537,74 @@
         }
 
         async function fetchWiktionary(word) {
-            const apiUrl = `https://fr.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(word)}&prop=wikitext&format=json&origin=*`;
-            let data;
-            try {
-                const r = await fetch(apiUrl);
-                data = await r.json();
-            } catch (e) {
-                const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
-                const r2 = await fetch(proxy);
-                const wrapper = await r2.json();
-                data = JSON.parse(wrapper.contents);
+            const apiBase = 'https://fr.wiktionary.org/w/api.php';
+
+            async function fetchPage(title) {
+                const url = `${apiBase}?action=parse&page=${encodeURIComponent(title)}&prop=wikitext&format=json&origin=*`;
+                try {
+                    const r = await fetch(url);
+                    return await r.json();
+                } catch (e) {
+                    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                    const r2 = await fetch(proxy);
+                    const wrapper = await r2.json();
+                    return JSON.parse(wrapper.contents);
+                }
             }
-            if (data.error) throw new Error('not found');
+
+            async function searchTitle(query) {
+                const url = `${apiBase}?action=opensearch&search=${encodeURIComponent(query)}&namespace=0&limit=1&format=json&origin=*`;
+                try {
+                    const r = await fetch(url);
+                    const json = await r.json();
+                    return json[1]?.[0] || null;
+                } catch (e) {
+                    return null;
+                }
+            }
+
+            let data = await fetchPage(word);
+
+            if (data.error) {
+                const suggested = await searchTitle(word);
+                if (!suggested) throw new Error('not found');
+                data = await fetchPage(suggested);
+                if (data.error) throw new Error('not found');
+                word = suggested;
+            }
+
             const wikitext = data.parse.wikitext['*'];
-            return parseWikitext(wikitext, word);
+            return parseWikitext(wikitext, data.parse.title || word);
+        }
+
+        function joinMultilineTemplates(text) {
+            const lines = text.split('\n');
+            const out = [];
+            let i = 0;
+            while (i < lines.length) {
+                let line = lines[i];
+                let depth = 0;
+                for (let k = 0; k < line.length - 1; k++) {
+                    if (line[k] === '{' && line[k+1] === '{') { depth++; k++; }
+                    else if (line[k] === '}' && line[k+1] === '}') { depth--; k++; }
+                }
+                while (depth > 0 && i + 1 < lines.length) {
+                    i++;
+                    const next = lines[i].trim();
+                    line += ' ' + next;
+                    for (let k = 0; k < next.length - 1; k++) {
+                        if (next[k] === '{' && next[k+1] === '{') { depth++; k++; }
+                        else if (next[k] === '}' && next[k+1] === '}') { depth--; k++; }
+                    }
+                }
+                out.push(line);
+                i++;
+            }
+            return out.join('\n');
         }
 
         function parseWikitext(text, word) {
+            text = joinMultilineTemplates(text);
             const result = { word, categories: [], definitions: [] };
 
             const posMap = {
@@ -481,21 +671,56 @@
             return result;
         }
 
+        const LABEL_EXPANSIONS = {
+            'vieilli': 'vieilli', 'désuet': 'vieilli', 'archaïque': 'archaïque',
+            'fam': 'familier', 'familier': 'familier',
+            'fig': 'figuré', 'figuré': 'figuré',
+            'par ext': 'par extension', 'par anal': 'par analogie',
+            'par métaphore': 'par métaphore', 'par méton': 'par métonymie',
+            'spéc': 'spécialement', 'absol': 'absolument',
+            'péj': 'péjoratif', 'pop': 'populaire', 'argot': 'argot',
+            'littér': 'littéraire', 'poét': 'poétique',
+            'iron': 'ironique', 'rare': 'rare', 'soutenu': 'soutenu',
+            'en particulier': 'en particulier', 'surtout': 'surtout',
+            'plur': 'pluriel', 'sing': 'singulier',
+        };
+
         function cleanWiki(s) {
-            return s
-                .replace(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g, '$1')
-                .replace(/{{([^}]*)}}/g, m => {
-                    const inner = m.slice(2, -2);
-                    const parts = inner.split('|');
-                    if (parts[0] === 'term' || parts[0] === 'lien' || parts[0] === 'l') return parts[parts.length - 1] || '';
-                    if (parts[0] === 'désuet' || parts[0] === 'vieilli') return '(vieilli)';
-                    if (parts[0] === 'familier' || parts[0] === 'fam') return '(familier)';
-                    if (parts[0] === 'figuré' || parts[0] === 'fig') return '(figuré)';
-                    return parts[parts.length - 1] || '';
-                })
-                .replace(/'{2,3}/g, '')
-                .replace(/\s+/g, ' ')
-                .trim();
+            // Step 1: replace templates → plain text
+            s = s.replace(/{{([^}]*)}}/g, m => {
+                const inner = m.slice(2, -2);
+                const parts = inner.split('|');
+                const name = parts[0].trim();
+                if (name === 'term' || name === 'lien' || name === 'l' || name === 'w') return parts[parts.length - 1] || '';
+                if (name === 'terme' && parts[1]) return `(${parts[1]})`;
+                if (name === 'exemple' || name === 'example') {
+                    const txt = parts.slice(1).find(p => !p.trim().includes('='));
+                    return txt ? txt.trim() : '';
+                }
+                const expansion = LABEL_EXPANSIONS[name];
+                if (expansion) return `(${expansion})`;
+                if (parts.length === 1) return `(${name})`;
+                return parts[parts.length - 1] || '';
+            });
+
+            // Step 2: strip bold/italic markers
+            s = s.replace(/'{2,3}/g, '');
+
+            // Step 3: build HTML — convert [[links]] to anchors, escape the rest
+            let html = '';
+            const linkRe = /\[\[([^\]]*)\]\]/g;
+            let last = 0, m;
+            while ((m = linkRe.exec(s)) !== null) {
+                html += escHtml(s.slice(last, m.index));
+                const pipeIdx = m[1].indexOf('|');
+                const target = (pipeIdx >= 0 ? m[1].slice(0, pipeIdx) : m[1]).split('#')[0].trim();
+                const display = pipeIdx >= 0 ? m[1].slice(pipeIdx + 1) : m[1];
+                html += `<a class="def-link" href="#" data-lookup="${escHtml(target)}">${escHtml(display)}</a>`;
+                last = m.index + m[0].length;
+            }
+            html += escHtml(s.slice(last));
+
+            return html.replace(/\s+/g, ' ').trim();
         }
 
         function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -529,8 +754,8 @@
             <div class="def-item">
               <span class="def-num">${i + 1}.</span>
               <span class="def-text">
-                ${escHtml(item.def)}
-                ${item.examples.map(ex => `<div class="example">${escHtml(ex)}</div>`).join('')}
+                ${item.def}
+                ${item.examples.map(ex => `<div class="example">${ex}</div>`).join('')}
               </span>
             </div>
           `).join('')}
@@ -550,7 +775,7 @@
 
         <div class="deck-row">
           <span class="anki-label" style="padding-top:8px">Paquet</span>
-          <input type="text" id="deckName" value="Français" placeholder="Nom du paquet Anki">
+          <input type="text" id="deckName" value="Vocab FR" placeholder="Nom du paquet Anki">
         </div>
 
         <div class="anki-row">
@@ -585,7 +810,7 @@
         }
 
         async function addToAnki() {
-            const deck = document.getElementById('deckName').value.trim() || 'Français';
+            const deck = document.getElementById('deckName').value.trim() || 'Vocab FR';
             const front = document.getElementById('ankiFront').value.trim();
             const back = document.getElementById('ankiBack').value.trim();
 
