@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Vocab FR">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="color-scheme" content="light only">
+    <title>Vocab FR</title>
+    <style>
+        :root {
+            color-scheme: light only;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        input,
+        textarea {
+            color-scheme: light;
+            -webkit-text-fill-color: #1a1a1a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f0;
+            min-height: 100vh;
+            color: #1a1a1a;
+            padding-bottom: 2rem;
+        }
+
+        header {
+            background: #fff;
+            border-bottom: 0.5px solid #e0e0e0;
+            padding: 1rem 1.25rem 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        header h1 {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1a1a1a;
+            letter-spacing: -0.3px;
+        }
+
+        header p {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .search-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 0.75rem;
+        }
+
+        #wordInput {
+            flex: 1;
+            height: 42px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 0 14px;
+            font-size: 17px;
+            background: #ffffff;
+            outline: none;
+            color: #1a1a1a;
+            transition: border-color 0.15s;
+        }
+
+        #wordInput:focus {
+            border-color: #534AB7;
+            background: #fff;
+        }
+
+        #searchBtn {
+            height: 42px;
+            padding: 0 18px;
+            background: #534AB7;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: background 0.15s;
+        }
+
+        #searchBtn:active {
+            background: #3C3489;
+        }
+
+        #searchBtn:disabled {
+            background: #b0addf;
+        }
+
+        .main {
+            padding: 1rem 1.25rem;
+        }
+
+        .status {
+            font-size: 14px;
+            color: #888;
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        .result-card {
+            background: #fff;
+            border-radius: 14px;
+            border: 0.5px solid #e0e0e0;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .word-header {
+            padding: 1rem 1.25rem 0.75rem;
+            border-bottom: 0.5px solid #f0f0f0;
+        }
+
+        .word-title {
+            font-size: 26px;
+            font-weight: 600;
+            color: #1a1a1a;
+            letter-spacing: -0.5px;
+        }
+
+        .word-meta {
+            font-size: 13px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .word-meta span {
+            color: #534AB7;
+            font-style: italic;
+        }
+
+        .section {
+            padding: 0.85rem 1.25rem;
+            border-bottom: 0.5px solid #f0f0f0;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #aaa;
+            margin-bottom: 6px;
+        }
+
+        .def-item {
+            font-size: 15px;
+            color: #1a1a1a;
+            line-height: 1.55;
+            padding: 4px 0;
+            display: flex;
+            gap: 8px;
+        }
+
+        .def-num {
+            font-size: 13px;
+            color: #bbb;
+            min-width: 16px;
+            padding-top: 2px;
+        }
+
+        .def-text {
+            flex: 1;
+        }
+
+        .example {
+            font-size: 13px;
+            color: #666;
+            font-style: italic;
+            margin-top: 3px;
+            line-height: 1.5;
+            padding-left: 24px;
+        }
+
+        .anki-section {
+            padding: 1rem 1.25rem;
+        }
+
+        .anki-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .anki-label {
+            font-size: 12px;
+            color: #888;
+            min-width: 70px;
+            padding-top: 9px;
+        }
+
+        .anki-input {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            background: #ffffff;
+            color: #1a1a1a;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            line-height: 1.4;
+        }
+
+        .anki-input:focus {
+            border-color: #534AB7;
+            background: #ffffff;
+        }
+
+        .deck-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+
+        #deckName {
+            flex: 1;
+            height: 36px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0 10px;
+            font-size: 14px;
+            background: #ffffff;
+            color: #1a1a1a;
+            outline: none;
+        }
+
+        #deckName:focus {
+            border-color: #534AB7;
+            background: #fff;
+        }
+
+        .add-btn {
+            width: 100%;
+            height: 46px;
+            background: #1D9E75;
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: background 0.15s;
+        }
+
+        .add-btn:active {
+            background: #0F6E56;
+        }
+
+        .add-btn:disabled {
+            background: #9FE1CB;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            background: #1a1a1a;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: transform 0.3s ease;
+            z-index: 100;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .toast.success {
+            background: #0F6E56;
+        }
+
+        .toast.error {
+            background: #993C1D;
+        }
+
+        .anki-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #534AB7;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .setup-hint {
+            background: #EEEDFE;
+            border-radius: 10px;
+            padding: 0.85rem 1rem;
+            font-size: 13px;
+            color: #3C3489;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .setup-hint strong {
+            font-weight: 600;
+        }
+
+        .setup-hint a {
+            color: #534AB7;
+        }
+
+        .wikt-link {
+            font-size: 13px;
+            color: #534AB7;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            margin-top: 6px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>Vocab FR</h1>
+        <p>Dictionnaire + AnkiDroid</p>
+        <div class="search-row">
+            <input type="text" id="wordInput" placeholder="Entrez un mot…" autocomplete="off" autocorrect="off"
+                spellcheck="false">
+            <button id="searchBtn" onclick="lookup()">Chercher</button>
+        </div>
+    </header>
+
+    <div class="main" id="main">
+        <div class="status" id="status">Entrez un mot français pour commencer.</div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const ANKI_URL = 'http://localhost:8765';
+
+        let currentWord = '';
+        let currentDefinitions = [];
+
+        document.getElementById('wordInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter') lookup();
+        });
+
+        async function lookup() {
+            const word = document.getElementById('wordInput').value.trim();
+            if (!word) return;
+            currentWord = word;
+
+            const btn = document.getElementById('searchBtn');
+            btn.disabled = true;
+            btn.textContent = '…';
+            setStatus('Recherche en cours…');
+
+            try {
+                const data = await fetchWiktionary(word);
+                renderResult(word, data);
+            } catch (e) {
+                setStatus('Mot non trouvé ou erreur réseau. Vérifiez votre connexion.');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Chercher';
+        }
+
+        async function fetchWiktionary(word) {
+            const apiUrl = `https://fr.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(word)}&prop=wikitext&format=json&origin=*`;
+            let data;
+            try {
+                const r = await fetch(apiUrl);
+                data = await r.json();
+            } catch (e) {
+                const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+                const r2 = await fetch(proxy);
+                const wrapper = await r2.json();
+                data = JSON.parse(wrapper.contents);
+            }
+            if (data.error) throw new Error('not found');
+            const wikitext = data.parse.wikitext['*'];
+            return parseWikitext(wikitext, word);
+        }
+
+        function parseWikitext(text, word) {
+            const result = { word, categories: [], definitions: [] };
+
+            const posMap = {
+                'nom commun': 'Nom commun', 'verbe': 'Verbe', 'adjectif': 'Adjectif',
+                'adverbe': 'Adverbe', 'préposition': 'Préposition', 'conjonction': 'Conjonction',
+                'pronom': 'Pronom', 'article': 'Article', 'interjection': 'Interjection',
+                'locution': 'Locution', 'nom propre': 'Nom propre'
+            };
+
+            let currentPos = '';
+            let defBuffer = [];
+            let inFrench = false;
+
+            const lines = text.split('\n');
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+
+                if (line.match(/^==\s*{{langue\|fr}}\s*==/i) || line.match(/^==\s*Français\s*==/i)) {
+                    inFrench = true;
+                    continue;
+                }
+                if (inFrench && line.match(/^==\s*{{langue\|(?!fr)/i)) {
+                    inFrench = false;
+                    continue;
+                }
+                if (!inFrench) continue;
+
+                const posMatch = line.match(/^===\s*{{S\|(.*?)(?:\|.*?)?}}\s*===/i)
+                    || line.match(/^===\s*(.*?)\s*===/);
+                if (posMatch) {
+                    if (defBuffer.length) {
+                        result.definitions.push({ pos: currentPos, items: [...defBuffer] });
+                        defBuffer = [];
+                    }
+                    const rawPos = posMatch[1].toLowerCase().replace(/{{.*?}}/g, '').trim();
+                    currentPos = posMap[rawPos] || capitalize(rawPos);
+                    continue;
+                }
+
+                if (line.startsWith('#') && !line.startsWith('#*') && !line.startsWith('#:') && currentPos) {
+                    const def = cleanWiki(line.replace(/^#+\s*/, ''));
+                    if (def && def.length > 2) {
+                        const examples = [];
+                        let j = i + 1;
+                        while (j < lines.length && (lines[j].startsWith('#*') || lines[j].startsWith('#:'))) {
+                            const ex = cleanWiki(lines[j].replace(/^[#*:]+\s*/, ''));
+                            if (ex) examples.push(ex);
+                            j++;
+                        }
+                        defBuffer.push({ def, examples: examples.slice(0, 2) });
+                    }
+                }
+            }
+
+            if (defBuffer.length) {
+                result.definitions.push({ pos: currentPos, items: defBuffer });
+            }
+
+            if (!result.definitions.length) {
+                result.definitions.push({ pos: '', items: [{ def: `Voir fr.wiktionary.org/wiki/${encodeURIComponent(word)}`, examples: [] }] });
+            }
+
+            return result;
+        }
+
+        function cleanWiki(s) {
+            return s
+                .replace(/\[\[(?:[^|\]]*\|)?([^\]]*)\]\]/g, '$1')
+                .replace(/{{([^}]*)}}/g, m => {
+                    const inner = m.slice(2, -2);
+                    const parts = inner.split('|');
+                    if (parts[0] === 'term' || parts[0] === 'lien' || parts[0] === 'l') return parts[parts.length - 1] || '';
+                    if (parts[0] === 'désuet' || parts[0] === 'vieilli') return '(vieilli)';
+                    if (parts[0] === 'familier' || parts[0] === 'fam') return '(familier)';
+                    if (parts[0] === 'figuré' || parts[0] === 'fig') return '(figuré)';
+                    return parts[parts.length - 1] || '';
+                })
+                .replace(/'{2,3}/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+        function renderResult(word, data) {
+            currentDefinitions = data.definitions;
+
+            const frontDefault = word;
+            const backDefault = data.definitions
+                .slice(0, 2)
+                .map(cat => {
+                    const defs = cat.items.slice(0, 3).map((d, i) => `${i + 1}. ${d.def}`).join('\n');
+                    return cat.pos ? `[${cat.pos}]\n${defs}` : defs;
+                })
+                .join('\n\n');
+
+            const html = `
+    <div class="result-card">
+      <div class="word-header">
+        <div class="word-title">${escHtml(word)}</div>
+        ${data.definitions[0]?.pos ? `<div class="word-meta"><span>${escHtml(data.definitions[0].pos)}</span></div>` : ''}
+        <a class="wikt-link" href="https://fr.wiktionary.org/wiki/${encodeURIComponent(word)}" target="_blank">
+          Voir sur Wiktionnaire ↗
+        </a>
+      </div>
+
+      ${data.definitions.map(cat => `
+        <div class="section">
+          ${cat.pos ? `<div class="section-label">${escHtml(cat.pos)}</div>` : ''}
+          ${cat.items.slice(0, 5).map((item, i) => `
+            <div class="def-item">
+              <span class="def-num">${i + 1}.</span>
+              <span class="def-text">
+                ${escHtml(item.def)}
+                ${item.examples.map(ex => `<div class="example">${escHtml(ex)}</div>`).join('')}
+              </span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div class="result-card">
+      <div class="anki-section">
+        <div class="anki-title">Ajouter à AnkiDroid</div>
+
+        <div class="setup-hint">
+          <strong>Configuration requise :</strong> installez l'extension
+          <a href="https://github.com/KamWithK/AnkiconnectAndroid" target="_blank">AnkiConnect Android</a>
+          et laissez AnkiDroid ouvert en arrière-plan.
+        </div>
+
+        <div class="deck-row">
+          <span class="anki-label" style="padding-top:8px">Paquet</span>
+          <input type="text" id="deckName" value="Français" placeholder="Nom du paquet Anki">
+        </div>
+
+        <div class="anki-row">
+          <span class="anki-label">Recto</span>
+          <textarea class="anki-input" id="ankiFront" rows="1">${escHtml(frontDefault)}</textarea>
+        </div>
+        <div class="anki-row">
+          <span class="anki-label">Verso</span>
+          <textarea class="anki-input" id="ankiBack" rows="5">${escHtml(backDefault)}</textarea>
+        </div>
+
+        <button class="add-btn" id="addBtn" onclick="addToAnki()">
+          Ajouter la carte
+        </button>
+      </div>
+    </div>
+  `;
+
+            document.getElementById('main').innerHTML = html;
+            autoResize();
+        }
+
+        function autoResize() {
+            document.querySelectorAll('.anki-input').forEach(el => {
+                el.style.height = 'auto';
+                el.style.height = el.scrollHeight + 'px';
+                el.addEventListener('input', () => {
+                    el.style.height = 'auto';
+                    el.style.height = el.scrollHeight + 'px';
+                });
+            });
+        }
+
+        async function addToAnki() {
+            const deck = document.getElementById('deckName').value.trim() || 'Français';
+            const front = document.getElementById('ankiFront').value.trim();
+            const back = document.getElementById('ankiBack').value.trim();
+
+            if (!front || !back) { showToast('Recto et verso requis.', 'error'); return; }
+
+            const btn = document.getElementById('addBtn');
+            btn.disabled = true;
+            btn.textContent = 'Envoi…';
+
+            try {
+                const payload = {
+                    action: 'addNote',
+                    version: 6,
+                    params: {
+                        note: {
+                            deckName: deck,
+                            modelName: 'Basic',
+                            fields: { Front: front, Back: back.replace(/\n/g, '<br>') },
+                            options: { allowDuplicate: false },
+                            tags: ['vocab-fr']
+                        }
+                    }
+                };
+
+                const r = await fetch(ANKI_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await r.json();
+
+                if (data.error) {
+                    if (data.error.includes('duplicate')) {
+                        showToast('Ce mot est déjà dans le paquet.', 'error');
+                    } else {
+                        showToast('Erreur Anki : ' + data.error, 'error');
+                    }
+                } else {
+                    showToast('Carte ajoutée !', 'success');
+                    document.getElementById('wordInput').value = '';
+                    document.getElementById('wordInput').focus();
+                }
+            } catch (e) {
+                showToast('Impossible de joindre AnkiConnect. AnkiDroid ouvert ?', 'error');
+            }
+
+            btn.disabled = false;
+            btn.textContent = 'Ajouter la carte';
+        }
+
+        function setStatus(msg) {
+            document.getElementById('main').innerHTML = `<div class="status">${msg}</div>`;
+        }
+
+        function escHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        let toastTimer;
+        function showToast(msg, type = '') {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.className = 'toast show ' + type;
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => t.className = 'toast', 3000);
+        }
+    </script>
+</body>
+
+</html>
