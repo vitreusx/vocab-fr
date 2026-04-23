@@ -351,7 +351,7 @@
             border-radius: 10px;
             overflow: hidden;
             z-index: 20;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
         }
 
         .suggestion-item {
@@ -585,16 +585,16 @@
                 let line = lines[i];
                 let depth = 0;
                 for (let k = 0; k < line.length - 1; k++) {
-                    if (line[k] === '{' && line[k+1] === '{') { depth++; k++; }
-                    else if (line[k] === '}' && line[k+1] === '}') { depth--; k++; }
+                    if (line[k] === '{' && line[k + 1] === '{') { depth++; k++; }
+                    else if (line[k] === '}' && line[k + 1] === '}') { depth--; k++; }
                 }
                 while (depth > 0 && i + 1 < lines.length) {
                     i++;
                     const next = lines[i].trim();
                     line += ' ' + next;
                     for (let k = 0; k < next.length - 1; k++) {
-                        if (next[k] === '{' && next[k+1] === '{') { depth++; k++; }
-                        else if (next[k] === '}' && next[k+1] === '}') { depth--; k++; }
+                        if (next[k] === '{' && next[k + 1] === '{') { depth++; k++; }
+                        else if (next[k] === '}' && next[k + 1] === '}') { depth--; k++; }
                     }
                 }
                 out.push(line);
@@ -846,6 +846,8 @@
                 if (data.error) {
                     if (data.error.includes('duplicate')) {
                         showToast('Ce mot est déjà dans le paquet.', 'error');
+                    } else if (data.error.includes('deck')) {
+                        showToast(`Paquet "${deck}" introuvable — créez-le dans AnkiDroid d'abord.`, 'error');
                     } else {
                         showToast('Erreur Anki : ' + data.error, 'error');
                     }
