@@ -387,6 +387,20 @@
             gap: 3px;
             margin-top: 6px;
         }
+
+        .lang-tag {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            padding: 1px 5px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 5px;
+        }
+
+        .lang-tag.en { background: #E8F4EE; color: #1D9E75; }
+        .lang-tag.fr { background: #EEEDFE; color: #534AB7; }
     </style>
 </head>
 
@@ -526,8 +540,11 @@
             setStatus('Recherche en cours…');
 
             try {
-                const data = await fetchWiktionary(word);
-                renderResult(data.word, data);
+                const [frData, enData] = await Promise.all([
+                    fetchWiktionary(word),
+                    fetchEnWiktionary(word)
+                ]);
+                renderResult(frData.word, frData, enData);
             } catch (e) {
                 setStatus('Mot non trouvé ou erreur réseau. Vérifiez votre connexion.');
             }
@@ -575,6 +592,78 @@
 
             const wikitext = data.parse.wikitext['*'];
             return parseWikitext(wikitext, data.parse.title || word);
+        }
+
+        async function fetchEnWiktionary(word) {
+            const url = `https://en.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(word)}&prop=wikitext&format=json&origin=*`;
+            try {
+                const r = await fetch(url);
+                const data = await r.json();
+                if (data.error) return null;
+                return parseEnWikitext(data.parse.wikitext['*'], data.parse.title || word);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function parseEnWikitext(text, word) {
+            const posMap = {
+                'noun': 'Nom', 'verb': 'Verbe', 'adjective': 'Adjectif',
+                'adverb': 'Adverbe', 'preposition': 'Préposition', 'conjunction': 'Conjonction',
+                'pronoun': 'Pronom', 'article': 'Article', 'interjection': 'Interjection',
+                'phrase': 'Locution', 'proper noun': 'Nom propre', 'determiner': 'Déterminant',
+                'numeral': 'Numéral', 'particle': 'Particule'
+            };
+            const result = { word, definitions: [] };
+            let inFrench = false, currentPos = '', defBuffer = [];
+            for (const line of text.split('\n')) {
+                const t = line.trim();
+                if (t === '==French==') { inFrench = true; continue; }
+                if (inFrench && /^==[^=]/.test(t)) { inFrench = false; continue; }
+                if (!inFrench) continue;
+                const posMatch = t.match(/^={3,4}\s*(.*?)\s*={3,4}$/);
+                if (posMatch) {
+                    if (defBuffer.length) { result.definitions.push({ pos: currentPos, items: [...defBuffer] }); defBuffer = []; }
+                    currentPos = posMap[posMatch[1].toLowerCase()] || capitalize(posMatch[1]);
+                    continue;
+                }
+                if (/^# /.test(t) && !/^#[:#*]/.test(t)) {
+                    const def = cleanEnWiki(t.slice(2));
+                    if (def.length > 1) defBuffer.push({ def });
+                }
+            }
+            if (defBuffer.length) result.definitions.push({ pos: currentPos, items: defBuffer });
+            return result.definitions.length ? result : null;
+        }
+
+        function cleanEnWiki(s) {
+            s = s.replace(/{{([^}]*)}}/g, m => {
+                const parts = m.slice(2, -2).split('|');
+                const name = parts[0].trim().toLowerCase();
+                if (name === 'lb' || name === 'label') {
+                    const labels = parts.slice(2).filter(p => p.trim() && !p.includes('='));
+                    return labels.length ? `(${labels.join(', ')})` : '';
+                }
+                if (name === 'l' || name === 'link' || name === 'm') return parts[parts.length - 1] || '';
+                if (name === 'qualifier' || name === 'q') return parts[1] ? `(${parts[1]})` : '';
+                if (name === 'gloss' || name === 'gl') return parts[1] ? `(${parts[1]})` : '';
+                if (name === 'non-gloss definition' || name === 'n-g' || name === 'ngd') return parts[1] || '';
+                if (name === 'synonym of' || name === 'syn of') {
+                    const w = parts.find((p, i) => i > 0 && !p.includes('=')) || '';
+                    return `synonym of ${w}`;
+                }
+                if (name === 'alt form of' || name === 'alternative form of') {
+                    const w = parts.find((p, i) => i > 0 && !p.includes('=')) || '';
+                    return `alternative form of ${w}`;
+                }
+                if (name === 'rfdef' || name === 'defn') return '';
+                return parts[parts.length - 1] || '';
+            });
+            s = s.replace(/\[\[([^\]]*)\]\]/g, (_, inner) => {
+                const p = inner.indexOf('|');
+                return p >= 0 ? inner.slice(p + 1) : inner;
+            });
+            return s.replace(/'{2,3}/g, '').replace(/\s+/g, ' ').trim();
         }
 
         function joinMultilineTemplates(text) {
@@ -725,17 +814,34 @@
 
         function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-        function renderResult(word, data) {
+        function renderResult(word, data, enData = null) {
             currentDefinitions = data.definitions;
 
             const frontDefault = word;
-            const backDefault = data.definitions
-                .slice(0, 2)
-                .map(cat => {
+            const backDefault = enData
+                ? enData.definitions.slice(0, 2).map(cat => {
                     const defs = cat.items.slice(0, 3).map((d, i) => `${i + 1}. ${d.def}`).join('\n');
                     return cat.pos ? `[${cat.pos}]\n${defs}` : defs;
-                })
-                .join('\n\n');
+                  }).join('\n\n')
+                : data.definitions.slice(0, 2).map(cat => {
+                    const defs = cat.items.slice(0, 3).map((d, i) => `${i + 1}. ${d.def}`).join('\n');
+                    return cat.pos ? `[${cat.pos}]\n${defs}` : defs;
+                  }).join('\n\n');
+
+            const renderDefs = (cats, tag, raw = false) => cats.map(cat => `
+        <div class="section">
+          <div class="section-label"><span class="lang-tag ${tag}">${tag.toUpperCase()}</span>${cat.pos ? escHtml(cat.pos) : ''}</div>
+          ${cat.items.slice(0, 5).map((item, i) => `
+            <div class="def-item">
+              <span class="def-num">${i + 1}.</span>
+              <span class="def-text">
+                ${raw ? item.def : escHtml(item.def)}
+                ${(item.examples || []).map(ex => `<div class="example">${raw ? ex : escHtml(ex)}</div>`).join('')}
+              </span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
 
             const html = `
     <div class="result-card">
@@ -747,20 +853,8 @@
         </a>
       </div>
 
-      ${data.definitions.map(cat => `
-        <div class="section">
-          ${cat.pos ? `<div class="section-label">${escHtml(cat.pos)}</div>` : ''}
-          ${cat.items.slice(0, 5).map((item, i) => `
-            <div class="def-item">
-              <span class="def-num">${i + 1}.</span>
-              <span class="def-text">
-                ${item.def}
-                ${item.examples.map(ex => `<div class="example">${ex}</div>`).join('')}
-              </span>
-            </div>
-          `).join('')}
-        </div>
-      `).join('')}
+      ${enData ? renderDefs(enData.definitions, 'en') : ''}
+      ${renderDefs(data.definitions, 'fr', true)}
     </div>
 
     <div class="result-card">
